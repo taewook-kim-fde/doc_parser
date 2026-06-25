@@ -27,10 +27,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
     TMPDIR=/app/tmp \
     HF_HOME=/app/.cache/huggingface \
     NLTK_DATA=/app/nltk_data
+# [1/7] 시스템 도구 및 라이브러리
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    echo "deb http://deb.debian.org/debian sid main" > /etc/apt/sources.list.d/sid.list && \
-    printf "Package: python3.13 python3.13-minimal libpython3.13 libpython3.13-minimal libpython3.13-stdlib\nPin: release a=sid\nPin-Priority: 990\n\nPackage: *\nPin: release a=sid\nPin-Priority: 100\n" > /etc/apt/preferences.d/pin-python3.13 && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
       net-tools \
@@ -48,32 +47,70 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       libgdk-pixbuf-xlib-2.0-0 \
       libffi-dev \
       libgl1 \
-      libreoffice \
       ffmpeg \
       unzip \
-      openjdk-21-jre-headless  \
-      ca-certificates-java  \
-      libreoffice-java-common \
-      libreoffice-writer \
-      libreoffice-impress \
-      libreoffice-l10n-ko \
+      sudo
+
+# [2/7] 폰트
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get install -y --no-install-recommends \
       fonts-dejavu \
       fonts-noto-cjk \
       fonts-noto-cjk-extra \
-      fonts-nanum \
+      fonts-nanum
+
+# [3/7] 문서 처리 도구 (imagemagick, poppler, tesseract)
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get install -y --no-install-recommends \
       imagemagick \
       poppler-utils \
       tesseract-ocr \
       tesseract-ocr-eng \
-      tesseract-ocr-kor \
-      sudo \
-    && apt-get install -y --no-install-recommends --only-upgrade \
+      tesseract-ocr-kor
+
+# [4/7] LibreOffice + Java (trixie only, sid 추가 전 — 의존성 충돌 방지)
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get install -y --no-install-recommends \
+      locales-all \
+      libreoffice \
+      libreoffice-java-common \
+      libreoffice-writer \
+      libreoffice-impress \
+      libreoffice-l10n-ko \
+      openjdk-21-jre-headless \
+      ca-certificates-java
+
+# [5/7] sid 소스 추가 + Perl 5.40
+# LibreOffice 설치 완료 후 sid 를 추가해야 의존성 해결 시 sid 패키지 혼입을 방지할 수 있다.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    echo "deb http://deb.debian.org/debian sid main" > /etc/apt/sources.list.d/sid.list && \
+    apt-get update && \
+    apt-get install -y -t sid perl perl-modules-5.40 libperl5.40
+
+# [6/7] CVE 보안 패치 — 기설치 패키지 업그레이드
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get install -y --no-install-recommends --only-upgrade \
+      openssl libssl3t64 openssl-provider-legacy \
+      curl libcurl4t64 libcurl3t64-gnutls \
       imagemagick \
       imagemagick-7.q16 \
       libmagickcore-7.q16-10 \
-      libmagickwand-7.q16-10 \
-    && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /app/.cache/huggingface /app/.cache/fontconfig /app/.config /app/.local/share /app/.fontconfig /app/nltk_data /app/tmp /tmp/xdg
+      libmagickwand-7.q16-10
+
+# [7/7] Archive::Tar (cpanm) + 디렉토리 초기화
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get install -y --no-install-recommends cpanminus make && \
+    cpanm --notest Archive::Tar && \
+    apt-get purge -y cpanminus make && \
+    apt-get autoremove -y && \
+    rm -rf /root/.cpanm && \
+    mkdir -p /app/.cache/huggingface /app/.cache/fontconfig /app/.config /app/.local/share /app/.fontconfig /app/nltk_data /app/tmp /tmp/xdg
 RUN sed -i 's/# \(ko_KR.UTF-8\)/\1/' /etc/locale.gen \
     && locale-gen \
     && fc-cache -f -v || true
@@ -137,16 +174,56 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync
 
 ############################
-# 4) 모델 아티팩트
+# 4a) 모델 아티팩트 — Docling
 ############################
-FROM builder AS models_artifacts
+FROM builder AS models_docling
 ARG APP_VENV
-ARG NLTK_PACKAGES
-ARG DOCLING_MODELS_VER=2.41
-ARG HF_MODELS_VER=2.41
-ARG EASYOCR_VER=2.41
+ARG DOCLING_MODELS_VER=1.3.7
 
-# 👉 여기서도 APP_VENV 그대로 씀
+ENV PATH="${APP_VENV}/bin:${PATH}" \
+    HOME=/app \
+    XDG_CACHE_HOME=/app/.cache \
+    XDG_CONFIG_HOME=/app/.config \
+    XDG_DATA_HOME=/app/.local/share \
+    XDG_RUNTIME_DIR=/tmp/xdg \
+    TMPDIR=/app/tmp \
+    HF_HOME=/app/.cache/huggingface
+
+RUN --mount=type=cache,target=/root/.cache/models \
+    echo "Docling models ver: ${DOCLING_MODELS_VER}"; \
+    docling-tools models download -o /models
+
+############################
+# 4b) 모델 아티팩트 — HuggingFace
+############################
+FROM builder AS models_hf
+ARG APP_VENV
+ARG HF_MODELS_VER=1.3.7
+
+ENV PATH="${APP_VENV}/bin:${PATH}" \
+    HOME=/app \
+    XDG_CACHE_HOME=/app/.cache \
+    XDG_CONFIG_HOME=/app/.config \
+    XDG_DATA_HOME=/app/.local/share \
+    XDG_RUNTIME_DIR=/tmp/xdg \
+    TMPDIR=/app/tmp \
+    HF_HOME=/app/.cache/huggingface
+
+RUN --mount=type=cache,target=/app/.cache/huggingface \
+    echo "HF models ver: ${HF_MODELS_VER}"; \
+    mkdir -p /models/doc_parser_models; \
+    huggingface-cli download mncai/doc_parser_models --local-dir /models/doc_parser_models
+
+RUN --mount=type=cache,target=/app/.cache/huggingface \
+    huggingface-cli download mncai/doc_parser_models --include "sentence-transformers-all-MiniLM-L6-v2/*" --local-dir /models/doc_parser_models/sentence-transformers-all-MiniLM-L6-v2
+
+############################
+# 4c) 모델 아티팩트 — NLTK
+############################
+FROM builder AS models_nltk
+ARG APP_VENV
+ARG NLTK_PACKAGES=all
+
 ENV PATH="${APP_VENV}/bin:${PATH}" \
     HOME=/app \
     XDG_CACHE_HOME=/app/.cache \
@@ -156,20 +233,6 @@ ENV PATH="${APP_VENV}/bin:${PATH}" \
     TMPDIR=/app/tmp \
     HF_HOME=/app/.cache/huggingface \
     NLTK_DATA=/app/nltk_data
-
-RUN --mount=type=cache,target=/root/.cache/models \
-    echo "Docling models ver: ${DOCLING_MODELS_VER}"; \
-    if [ ! -d /models ] || [ -z "$(ls -A /models)" ]; then \
-        docling-tools models download -o /models; \
-    else \
-        echo "[INFO] /models already present, skip"; \
-    fi
-
-RUN --mount=type=cache,target=${HF_HOME} \
-    echo "HF models ver: ${HF_MODELS_VER}"; \
-    mkdir -p /models/doc_parser_models; \
-    huggingface-cli download mncai/doc_parser_models --local-dir /models/doc_parser_models && \
-    huggingface-cli download mncai/doc_parser_models --include "sentence-transformers-all-MiniLM-L6-v2/*" --local-dir /models/doc_parser_models/sentence-transformers-all-MiniLM-L6-v2
 
 RUN --mount=type=cache,target=/root/.cache/nltk \
     python - <<'PY'
@@ -187,13 +250,19 @@ else:
         nltk.download(pkg, download_dir=target)
 PY
 
+############################
+# 4d) 모델 아티팩트 — EasyOCR (base에서 직접, venv 불필요)
+############################
+FROM base AS models_easyocr
+ARG EASYOCR_VER=1.3.7
+
 RUN --mount=type=cache,target=/root/.cache/easyocr_korean \
     echo "EasyOCR ver: ${EASYOCR_VER}"; \
     mkdir -p /models/EasyOcr && \
-    if [ ! -f /models/EasyOcr/korean_g2.zip ]; then \
+    if [ ! -f /root/.cache/easyocr_korean/korean_g2.zip ]; then \
       curl -L -o /root/.cache/easyocr_korean/korean_g2.zip "https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/korean_g2.zip"; \
-      unzip -q -o /root/.cache/easyocr_korean/korean_g2.zip -d /models/EasyOcr; \
-    fi
+    fi; \
+    unzip -q -o /root/.cache/easyocr_korean/korean_g2.zip -d /models/EasyOcr
 
 ############################
 # 5) Runtime
@@ -228,9 +297,11 @@ COPY ./genon/preprocessor/src /app/src
 # ✅ 공통 venv 위치만 복사
 COPY --from=builder ${APP_VENV} ${APP_VENV}
 
-# ✅ 모델/자료
-COPY --from=models_artifacts /app/nltk_data /app/nltk_data
-COPY --from=models_artifacts /models /models
+# ✅ 모델/자료 (스테이지별 독립 레이어)
+COPY --from=models_docling /models /models
+COPY --from=models_hf /models/doc_parser_models /models/doc_parser_models
+COPY --from=models_easyocr /models/EasyOcr /models/EasyOcr
+COPY --from=models_nltk /app/nltk_data /app/nltk_data
 
 RUN ln -sf /app/configs/supervisor.conf /etc/supervisor/conf.d/supervisor.conf
 RUN getent group "${GID}" || groupadd -g "${GID}" "${GNAME}" && \
