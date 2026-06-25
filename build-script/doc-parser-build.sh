@@ -82,9 +82,9 @@ esac
 # 그 외 조합은 hw 먼저, variant 나중 순서로 접미사: ${IMAGE_VERSION}-${HW_VARIANT}-${BUILD_VARIANT}
 #   예) gpu+synap → :1.3.6.3-gpu-synap / cpu+standard → :1.3.6.3
 if [[ "${HW_VARIANT}" == "cpu" && "${BUILD_VARIANT}" == "standard" ]]; then
-  IMAGE_TAG="${DOCKER_REGISTRY}/mnc/${IMAGE_NAME}:${IMAGE_VERSION}"
+  IMAGE_TAG="${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_VERSION}"
 else
-  IMAGE_TAG="${DOCKER_REGISTRY}/mnc/${IMAGE_NAME}:${IMAGE_VERSION}-${HW_VARIANT}-${BUILD_VARIANT}"
+  IMAGE_TAG="${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_VERSION}-${HW_VARIANT}-${BUILD_VARIANT}"
 fi
 
 echo "[INFO] ROOT_DIR        = ${ROOT_DIR}"

@@ -3,8 +3,8 @@
 ########################################
 # 0) 공통 ARG
 ########################################
-ARG PY_VER=3.10
-ARG DEBIAN_DIST=bookworm
+ARG PY_VER=3.12.13
+ARG DEBIAN_DIST=trixie
 
 # Paddle GPU wheel 있는 곳 (변수화)
 ARG PADDLE_EXTRA_INDEX_URL="https://www.paddlepaddle.org.cn/packages/stable/cu126/"
@@ -39,7 +39,17 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         libgl1 \
         libglib2.0-0 \
         libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
+    && echo "deb http://deb.debian.org/debian sid main" > /etc/apt/sources.list.d/sid.list \
+    && apt-get update \
+    && apt-get install -y -t sid perl perl-modules-5.40 libperl5.40 \
+    && apt-get install -y --no-install-recommends --only-upgrade \
+      openssl curl \
+    && apt-get install -y --no-install-recommends cpanminus make \
+    && cpanm --notest Archive::Tar \
+    && apt-get purge -y cpanminus make \
+    && apt-get autoremove -y \
+    && rm /etc/apt/sources.list.d/sid.list \
+    && rm -rf /var/lib/apt/lists/* /root/.cpanm
 
 # uv 바이너리
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/

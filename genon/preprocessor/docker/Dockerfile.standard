@@ -11,7 +11,7 @@
 ############################
 # 0) 공통 ARG/ENV
 ############################
-ARG PY_VER=3.12.12
+ARG PY_VER=3.12.13
 ARG DEBIAN_DIST=trixie
 ARG H2ORESTART_URL="https://github.com/ebandal/H2Orestart/releases/latest/download/H2Orestart.oxt"
 ARG APP_VENV=/app/.venv
@@ -54,7 +54,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       fontconfig \
       procps \
       supervisor \
-      vim \
       libmagic1 \
       libmagic-dev \
       libpango-1.0-0 \
@@ -82,12 +81,19 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       tesseract-ocr-eng \
       tesseract-ocr-kor \
       sudo \
+    && apt-get install -y -t sid perl perl-modules-5.40 libperl5.40 \
     && apt-get install -y --no-install-recommends --only-upgrade \
+      openssl libssl3t64 openssl-provider-legacy \
+      curl libcurl4t64 libcurl4-gnutls \
       imagemagick \
       imagemagick-7.q16 \
       libmagickcore-7.q16-10 \
       libmagickwand-7.q16-10 \
-    && rm -rf /var/lib/apt/lists/* \
+    && apt-get install -y --no-install-recommends cpanminus make \
+    && cpanm --notest Archive::Tar \
+    && apt-get purge -y cpanminus make \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/* /root/.cpanm \
     && mkdir -p /app/.cache/huggingface /app/.cache/fontconfig /app/.config /app/.local/share /app/.fontconfig /app/nltk_data /app/tmp /tmp/xdg
 RUN sed -i 's/# \(ko_KR.UTF-8\)/\1/' /etc/locale.gen \
     && locale-gen \
