@@ -33,6 +33,7 @@ echo "[INFO] dockerfile   : $DOCKERFILE"
 
 # buildx 안 쓰는 기본 빌드
 docker build \
+  --platform linux/amd64 \
   --file "$DOCKERFILE" \
   --build-arg PADDLE_EXTRA_INDEX_URL="${PADDLE_EXTRA_INDEX_URL:-}" \
   --tag "$FULL_IMAGE" \
