@@ -57,11 +57,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
 #   제대로 읽히는 .pref 파일로 sudo·systemd 만 trixie(우선순위 1001)로 강제한다.
 # 추가로 sudo 의 `systemd | systemd-standalone-tmpfiles | systemd-tmpfiles` 의존은
 # 풀 systemd 대신 컨테이너 친화적 systemd-standalone-tmpfiles 로 충족시킨다.
+# [1/6] trixie pin 설정 (sid 소스 없이 — LibreOffice 의존성 해결을 trixie 로 고정)
+RUN printf "Package: sudo systemd python3 python3-minimal libpython3-stdlib\nPin: release n=trixie\nPin-Priority: 1001\n" > /etc/apt/preferences.d/force-trixie-sudo.pref
+
+# [2/6] 핵심 패키지 (trixie only)
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    echo "deb http://deb.debian.org/debian sid main" > /etc/apt/sources.list.d/sid.list && \
-    printf "Package: python3.13 python3.13-minimal libpython3.13 libpython3.13-minimal libpython3.13-stdlib\nPin: release a=sid\nPin-Priority: 990\n\nPackage: *\nPin: release a=sid\nPin-Priority: 100\n" > /etc/apt/preferences.d/pin-python3.13 && \
-    printf "Package: sudo systemd python3 python3-minimal libpython3-stdlib\nPin: release n=trixie\nPin-Priority: 1001\n" > /etc/apt/preferences.d/force-trixie-sudo.pref && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
       net-tools \
@@ -91,34 +92,55 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       tesseract-ocr-eng \
       tesseract-ocr-kor \
       sudo \
-      systemd-standalone-tmpfiles \
-    && if [ "${INSTALL_LIBREOFFICE}" = "true" ]; then \
-         echo "[INFO] INSTALL_LIBREOFFICE=true — installing LibreOffice + Java stack" && \
-         apt-get install -y --no-install-recommends \
-           libreoffice \
-           libreoffice-java-common \
-           libreoffice-writer \
-           libreoffice-impress \
-           libreoffice-l10n-ko \
-           openjdk-21-jre-headless \
-           ca-certificates-java; \
-       else \
-         echo "[INFO] INSTALL_LIBREOFFICE=false — skipping LibreOffice/Java (이슈 #286)"; \
-       fi \
-    && apt-get install -y -t sid perl perl-modules-5.40 libperl5.40 \
-    && apt-get install -y --no-install-recommends --only-upgrade \
+      systemd-standalone-tmpfiles
+
+# [3/6] LibreOffice + Java (trixie only, sid 소스 추가 전에 설치해 의존성 충돌 차단)
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    if [ "${INSTALL_LIBREOFFICE}" = "true" ]; then \
+      echo "[INFO] INSTALL_LIBREOFFICE=true — installing LibreOffice + Java stack" && \
+      apt-get install -y --no-install-recommends \
+        locales-all \
+        libreoffice \
+        libreoffice-java-common \
+        libreoffice-writer \
+        libreoffice-impress \
+        libreoffice-l10n-ko \
+        openjdk-21-jre-headless \
+        ca-certificates-java; \
+    else \
+      echo "[INFO] INSTALL_LIBREOFFICE=false — skipping LibreOffice/Java (이슈 #286)"; \
+    fi
+
+# [4/6] sid 소스 추가 + Perl 5.40
+# LibreOffice 설치 완료 후 sid 를 추가해야 의존성 해결 시 sid 패키지 혼입을 방지할 수 있다.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    echo "deb http://deb.debian.org/debian sid main" > /etc/apt/sources.list.d/sid.list && \
+    printf "Package: python3.13 python3.13-minimal libpython3.13 libpython3.13-minimal libpython3.13-stdlib\nPin: release a=sid\nPin-Priority: 990\n\nPackage: *\nPin: release a=sid\nPin-Priority: 100\n" > /etc/apt/preferences.d/pin-python3.13 && \
+    apt-get update && \
+    apt-get install -y -t sid perl perl-modules-5.40 libperl5.40
+
+# [5/6] CVE 보안 패치 — 기설치 패키지 업그레이드
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get install -y --no-install-recommends --only-upgrade \
       openssl libssl3t64 openssl-provider-legacy \
       curl libcurl4t64 libcurl3t64-gnutls \
       imagemagick \
       imagemagick-7.q16 \
       libmagickcore-7.q16-10 \
-      libmagickwand-7.q16-10 \
-    && apt-get install -y --no-install-recommends cpanminus make \
-    && cpanm --notest Archive::Tar \
-    && apt-get purge -y cpanminus make \
-    && apt-get autoremove -y \
-    && rm -rf /var/lib/apt/lists/* /root/.cpanm \
-    && mkdir -p /app/.cache/huggingface /app/.cache/fontconfig /app/.config /app/.local/share /app/.fontconfig /app/nltk_data /app/tmp /tmp/xdg
+      libmagickwand-7.q16-10
+
+# [6/6] Archive::Tar (cpanm) + 디렉토리 초기화
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get install -y --no-install-recommends cpanminus make && \
+    cpanm --notest Archive::Tar && \
+    apt-get purge -y cpanminus make && \
+    apt-get autoremove -y && \
+    rm -rf /root/.cpanm && \
+    mkdir -p /app/.cache/huggingface /app/.cache/fontconfig /app/.config /app/.local/share /app/.fontconfig /app/nltk_data /app/tmp /tmp/xdg
 RUN sed -i 's/# \(ko_KR.UTF-8\)/\1/' /etc/locale.gen \
     && locale-gen \
     && fc-cache -f -v || true
