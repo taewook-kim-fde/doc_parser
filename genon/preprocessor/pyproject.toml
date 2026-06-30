@@ -17,7 +17,6 @@ dependencies = [
     "aiohttp>=3.14.1",
     "cryptography>=48.0.1",
     "transformers==4.57.6",
-    "accelerate==1.12.0",
     "nltk>=3.9.3",
     "unstructured>=0.18.15",
     "python-pptx==1.0.2",
@@ -55,6 +54,7 @@ dependencies = [
     "opencv-python==4.11.0.86",
     "numpy==2.3.4",
     "minio==7.2.20",
+    "torch",
 ]
 
 [dependency-groups]
@@ -80,10 +80,16 @@ dev = [
     "pytest-asyncio>=1.2.0"
 ]
 
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 [tool.uv.sources]
-docling = [
-    { path = "../.." }
-]
+docling = [{ path = "../.." }]
+torch = [{ index = "pytorch-cpu" }]
+torchvision = [{ index = "pytorch-cpu" }]
+torchaudio = [{ index = "pytorch-cpu" }]
 
 [tool.hatch.build.targets.sdist]
 include = ["src/**/*", "*.json"]
