@@ -7,6 +7,7 @@ ARG PY_VER=3.12.12
 ARG DEBIAN_DIST=trixie
 ARG H2ORESTART_URL="https://github.com/ebandal/H2Orestart/releases/latest/download/H2Orestart.oxt"
 ARG APP_VENV=/app/.venv
+ARG NLTK_PACKAGES=all
 ARG UID=1000
 ARG GID=1000
 ARG UNAME=genos
@@ -108,7 +109,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get purge -y cpanminus make && \
     apt-get autoremove -y && \
     rm -rf /root/.cpanm && \
-    mkdir -p /app/.cache/huggingface /app/.cache/fontconfig /app/.config /app/.local/share /app/.fontconfig /app/tmp /tmp/xdg
+    mkdir -p /app/.cache/huggingface /app/.cache/fontconfig /app/.config /app/.local/share /app/.fontconfig /app/nltk_data /app/tmp /tmp/xdg
 RUN sed -i 's/# \(ko_KR.UTF-8\)/\1/' /etc/locale.gen \
     && locale-gen \
     && fc-cache -f -v || true
@@ -152,7 +153,8 @@ ENV UV_VIRTUALENVS_CREATE=1 \
     XDG_DATA_HOME=/app/.local/share \
     XDG_RUNTIME_DIR=/tmp/xdg \
     TMPDIR=/app/tmp \
-    HF_HOME=/app/.cache/huggingface
+    HF_HOME=/app/.cache/huggingface \
+    NLTK_DATA=/app/nltk_data
 
 # 앱 관련 pyproject만
 COPY docling /app/docling
@@ -171,7 +173,64 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync
 
 ############################
-# 4) Runtime
+# 4a) 모델 아티팩트 — HuggingFace
+############################
+FROM builder AS models_hf
+ARG APP_VENV
+ARG HF_MODELS_VER=1.3.7
+
+ENV PATH="${APP_VENV}/bin:${PATH}" \
+    HOME=/app \
+    XDG_CACHE_HOME=/app/.cache \
+    XDG_CONFIG_HOME=/app/.config \
+    XDG_DATA_HOME=/app/.local/share \
+    XDG_RUNTIME_DIR=/tmp/xdg \
+    TMPDIR=/app/tmp \
+    HF_HOME=/app/.cache/huggingface
+
+RUN --mount=type=cache,target=/app/.cache/huggingface \
+    echo "HF models ver: ${HF_MODELS_VER}"; \
+    mkdir -p /models/doc_parser_models; \
+    huggingface-cli download mncai/doc_parser_models --local-dir /models/doc_parser_models
+
+RUN --mount=type=cache,target=/app/.cache/huggingface \
+    huggingface-cli download mncai/doc_parser_models --include "sentence-transformers-all-MiniLM-L6-v2/*" --local-dir /models/doc_parser_models/sentence-transformers-all-MiniLM-L6-v2
+
+############################
+# 4b) 모델 아티팩트 — NLTK
+############################
+FROM builder AS models_nltk
+ARG APP_VENV
+ARG NLTK_PACKAGES=all
+
+ENV PATH="${APP_VENV}/bin:${PATH}" \
+    HOME=/app \
+    XDG_CACHE_HOME=/app/.cache \
+    XDG_CONFIG_HOME=/app/.config \
+    XDG_DATA_HOME=/app/.local/share \
+    XDG_RUNTIME_DIR=/tmp/xdg \
+    TMPDIR=/app/tmp \
+    HF_HOME=/app/.cache/huggingface \
+    NLTK_DATA=/app/nltk_data
+
+RUN --mount=type=cache,target=/root/.cache/nltk \
+    python - <<'PY'
+import os
+import nltk
+
+target = os.environ.get("NLTK_DATA", "/app/nltk_data")
+os.makedirs(target, exist_ok=True)
+
+packages = os.environ.get("NLTK_PACKAGES", "all")
+if packages == "all":
+    nltk.download("all", download_dir=target)
+else:
+    for pkg in [p.strip() for p in packages.split(",") if p.strip()]:
+        nltk.download(pkg, download_dir=target)
+PY
+
+############################
+# 5) Runtime
 ############################
 FROM loext AS runtime
 ARG APP_VENV
@@ -189,6 +248,7 @@ ENV UV_PROJECT_ENVIRONMENT=${APP_VENV} \
     TMPDIR=/app/tmp \
     JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 \
     HF_HOME=/app/.cache/huggingface \
+    NLTK_DATA=/app/nltk_data \
     LANG=ko_KR.UTF-8 \
     LC_ALL=ko_KR.UTF-8 \
     LC_CTYPE=ko_KR.UTF-8
@@ -201,6 +261,10 @@ COPY ./genon/preprocessor/src /app/src
 # ✅ 공통 venv 위치만 복사
 COPY --from=builder ${APP_VENV} ${APP_VENV}
 
+# ✅ 모델/자료 (스테이지별 독립 레이어)
+COPY --from=models_hf /models/doc_parser_models /models/doc_parser_models
+COPY --from=models_nltk /app/nltk_data /app/nltk_data
+
 RUN ln -sf /app/configs/supervisor.conf /etc/supervisor/conf.d/supervisor.conf
 RUN getent group "${GID}" || groupadd -g "${GID}" "${GNAME}" && \
     getent passwd "${UID}" || useradd -m -u "${UID}" -g "${GID}" -s /bin/bash "${UNAME}" && \
@@ -208,6 +272,6 @@ RUN getent group "${GID}" || groupadd -g "${GID}" "${GNAME}" && \
     usermod -aG sudo "${UNAME_ACTUAL}" && \
     echo "${UNAME_ACTUAL} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
     mkdir -p /app/.cache/huggingface /app/.config/libreoffice /app/.cache/libreoffice /app/.local/share /app/tmp /tmp/xdg && \
-    chown -R "${UID}:${GID}" /app /run /var/log /etc/supervisor /app/.cache /app/.config /app/.local /tmp/xdg
+    chown -R "${UID}:${GID}" /app /run /var/log /etc/supervisor /models /app/nltk_data /app/.cache /app/.config /app/.local /tmp/xdg
 USER ${UID}:${GID}
 CMD ["supervisord", "-n"]
