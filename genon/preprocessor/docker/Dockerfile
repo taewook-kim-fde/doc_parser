@@ -91,22 +91,46 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get install -y -t sid perl perl-modules-5.40 libperl5.40
 
 # [6/7] CVE 보안 패치 — 기설치 패키지 업그레이드
+#   - openssl/curl   : 배포판 보안 업데이트
+#   - libmbedcrypto16: 3.6.6-0.1 (CVE-2026-34872/34873/34875/34877 fix, sid; SONAME 동일하여 ABI 호환)
+#   - imagemagick    : sid 로 업그레이드하여 libraw 의존을 libraw25(0.22.1-1)로 전환
+#   - libraw23t64    : 고아가 된 취약 패키지 제거 (CVE-2026-20889/CVE-2026-21413)
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get install -y --no-install-recommends --only-upgrade \
       openssl libssl3t64 openssl-provider-legacy \
       curl libcurl4t64 libcurl3t64-gnutls \
+      libmbedcrypto16 && \
+    apt-get install -y -t sid --no-install-recommends --only-upgrade \
       imagemagick \
       imagemagick-7.q16 \
       libmagickcore-7.q16-10 \
-      libmagickwand-7.q16-10
+      libmagickwand-7.q16-10 && \
+    apt-get purge -y libraw23t64 && \
+    apt-get autoremove --purge -y
 
-# [7/7] Archive::Tar (cpanm) + 디렉토리 초기화
+# [6b] ImageMagick policy.xml 강화 — CVE-2023-34152 (보안팀 지정 조치)
+#   EPHEMERAL 코더(읽기 후 파일 자동삭제) 비활성화.
+RUN python3 - <<'PY'
+path = "/etc/ImageMagick-7/policy.xml"
+with open(path) as f:
+    content = f.read()
+addition = '  <policy domain="coder" rights="none" pattern="EPHEMERAL" />\n'
+assert "</policymap>" in content, f"unexpected policy.xml format: {path}"
+if 'pattern="EPHEMERAL"' not in content:
+    content = content.replace("</policymap>", addition + "</policymap>")
+    with open(path, "w") as f:
+        f.write(content)
+PY
+
+# [7/7] Perl 모듈 CVE 패치 (cpanm) + 디렉토리 초기화
+#   - Archive::Tar >= 3.0.8 (CVE-2026-42496 fix)
+#   - Socket        >= 2.041  (CVE-2026-12087 fix; perl 코어 2.038 대체)
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    apt-get install -y --no-install-recommends cpanminus make && \
-    cpanm --notest Archive::Tar && \
-    apt-get purge -y cpanminus make && \
+    apt-get install -y --no-install-recommends cpanminus make gcc libc6-dev libcrypt-dev && \
+    cpanm --notest Archive::Tar Socket && \
+    apt-get purge -y cpanminus make gcc libc6-dev libcrypt-dev && \
     apt-get autoremove -y && \
     rm -rf /root/.cpanm && \
     mkdir -p /app/.cache/huggingface /app/.cache/fontconfig /app/.config /app/.local/share /app/.fontconfig /app/nltk_data /app/tmp /tmp/xdg

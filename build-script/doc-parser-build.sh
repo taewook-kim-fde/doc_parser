@@ -51,6 +51,10 @@ echo "[INFO] Build done: ${IMAGE_TAG}"
 
 # 푸시 여부 플래그
 if [[ "${PUSH_IMAGE:-false}" == "true" ]]; then
+  # push 전 단일 레이어로 flatten (하위 레이어의 purge/upgrade 잔재 제거, 레이어 스캐너(Labrador) 대응)
+  echo "[INFO] Flattening ${IMAGE_TAG} ..."
+  python3 "${ROOT_DIR}/build-script/flatten_image.py" "${IMAGE_TAG}"
+
   echo "[INFO] Pushing ${IMAGE_TAG} ..."
   docker push "${IMAGE_TAG}"
   echo "[INFO] Push done"
