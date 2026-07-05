@@ -127,6 +127,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 #     trixie 자체엔 fix 없음(Debian tracker: forky/sid 만 fixed) — -t sid 로 명시 지정.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && \
     apt-get install -y --no-install-recommends --only-upgrade \
       openssl libssl3t64 openssl-provider-legacy \
       curl libcurl4t64 libcurl3t64-gnutls \
