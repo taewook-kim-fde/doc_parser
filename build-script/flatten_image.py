@@ -12,7 +12,13 @@ import sys
 
 
 def sh(*args):
-    return subprocess.run(args, check=True, capture_output=True, text=True).stdout.strip()
+    return subprocess.run(
+        args,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+    ).stdout.strip()
 
 
 def build_changes(cfg):
@@ -57,7 +63,9 @@ def main():
         if importer.returncode != 0:
             sys.exit(f"docker import 실패: {dst}")
     finally:
-        subprocess.run(["docker", "rm", cid], capture_output=True)
+        subprocess.run(
+            ["docker", "rm", cid], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
     print(f"flattened: {src} -> {dst}")
 
 
