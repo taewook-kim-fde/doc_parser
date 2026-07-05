@@ -12,6 +12,8 @@ dependencies = [
     "paddlex==3.3.6",
     "paddlex[serving,ocr]",
     "uvicorn>=0.21,<0.22",
+    # CVE-2026-34520 대응 — langchain-community 경유 transitive dep, 3.13.4 이상 명시 고정
+    "aiohttp>=3.13.4",
 ]
 
 [build-system]

@@ -44,9 +44,11 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && apt-get install -y -t sid perl perl-modules-5.40 libperl5.40 \
     && apt-get install -y --no-install-recommends --only-upgrade \
       openssl curl \
-    && apt-get install -y --no-install-recommends cpanminus make \
-    && cpanm --notest Archive::Tar \
-    && apt-get purge -y cpanminus make \
+    # Perl 모듈 CVE 패치: Archive::Tar >= 3.0.8 (CVE-2026-42496), Socket >= 2.041 (CVE-2026-12087)
+    # Socket 은 XS 모듈이라 컴파일 필요 (build-essential 로 gcc/make 는 이미 있음, crypt.h 만 추가)
+    && apt-get install -y --no-install-recommends cpanminus libcrypt-dev \
+    && cpanm --notest Archive::Tar Socket \
+    && apt-get purge -y cpanminus libcrypt-dev \
     && apt-get autoremove -y \
     && rm /etc/apt/sources.list.d/sid.list \
     && rm -rf /var/lib/apt/lists/* /root/.cpanm

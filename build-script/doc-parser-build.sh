@@ -240,6 +240,10 @@ if [[ "${BUILD_VARIANT}" == "synap" ]]; then
   echo "[INFO] BUILD_VARIANT=synap — 공유 레지스트리 push 를 건너뜁니다 (이미지 빌드만 수행)."
   echo "[INFO] synap 이미지 배포가 필요하면 AI Search 팀에 문의하세요."
 elif [[ "${PUSH_IMAGE:-false}" == "true" ]]; then
+  # push 전 단일 레이어로 flatten (하위 레이어의 purge/upgrade 잔재 제거, 레이어 스캐너 대응)
+  echo "[INFO] Flattening ${IMAGE_TAG} ..."
+  python3 "${ROOT_DIR}/build-script/flatten_image.py" "${IMAGE_TAG}"
+
   echo "[INFO] Pushing ${IMAGE_TAG} ..."
   docker push "${IMAGE_TAG}"
   echo "[INFO] Push done"

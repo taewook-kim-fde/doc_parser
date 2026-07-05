@@ -43,6 +43,10 @@ echo "[INFO] build done: $FULL_IMAGE"
 
 # 레지스트리 있으면 푸시
 if [[ -n "$REGISTRY" ]]; then
+  # push 전 단일 레이어로 flatten (하위 레이어의 purge 잔재 제거, 레이어 스캐너 대응)
+  echo "[INFO] flattening $FULL_IMAGE"
+  python3 "${BASE_DIR}/build-script/flatten_image.py" "$FULL_IMAGE"
+
   echo "[INFO] pushing to $FULL_IMAGE"
   docker push "$FULL_IMAGE"
 fi
