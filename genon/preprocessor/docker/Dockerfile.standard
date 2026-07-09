@@ -305,10 +305,9 @@ RUN --mount=type=cache,target=${HF_HOME} \
     echo "[INFO] Downloading HWP SDK from Private HF Repo..."; \
     HWP_SDK_TOKEN_VAL=$(cat /run/secrets/HWP_SDK_TOKEN) && \
     mkdir -p /app/hwp_sdk && \
-    huggingface-cli download HeechanKim-Genon/hwp_sdk \
+    hf download HeechanKim-Genon/hwp_sdk \
       --repo-type dataset \
       --local-dir /app/hwp_sdk \
-      --local-dir-use-symlinks False \
       --token "${HWP_SDK_TOKEN_VAL}" && \
     chmod +x /app/hwp_sdk/convtext
 
@@ -320,10 +319,9 @@ FROM builder AS font_artifacts
 RUN --mount=type=cache,target=${HF_HOME} \
     echo "[INFO] Downloading extra fonts from HF (public)..." && \
     mkdir -p /app/extra_fonts && \
-    huggingface-cli download HeechanKim-Genon/additional_fonts \
+    hf download HeechanKim-Genon/additional_fonts \
       --repo-type dataset \
-      --local-dir /app/extra_fonts \
-      --local-dir-use-symlinks False
+      --local-dir /app/extra_fonts
 
 ############################
 # 4-2b) rhwp 바이너리 (이슈 #199 후속 — 컨테이너 내 바이너리)
@@ -389,8 +387,8 @@ RUN --mount=type=cache,target=/root/.cache/models \
 RUN --mount=type=cache,target=${HF_HOME} \
     echo "HF models ver: ${HF_MODELS_VER}"; \
     mkdir -p /models/doc_parser_models; \
-    huggingface-cli download mncai/doc_parser_models --local-dir /models/doc_parser_models && \
-    huggingface-cli download mncai/doc_parser_models --include "sentence-transformers-all-MiniLM-L6-v2/*" --local-dir /models/doc_parser_models/sentence-transformers-all-MiniLM-L6-v2
+    hf download mncai/doc_parser_models --local-dir /models/doc_parser_models && \
+    hf download mncai/doc_parser_models --include "sentence-transformers-all-MiniLM-L6-v2/*" --local-dir /models/doc_parser_models/sentence-transformers-all-MiniLM-L6-v2
 
 RUN --mount=type=cache,target=/root/.cache/nltk \
     python - <<'PY'
