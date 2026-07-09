@@ -126,10 +126,24 @@ PY
 # [7/7] Perl 모듈 CVE 패치 (cpanm) + 디렉토리 초기화
 #   - Archive::Tar >= 3.0.8 (CVE-2026-42496 fix)
 #   - Socket        >= 2.041  (CVE-2026-12087 fix; perl 코어 2.038 대체)
+#   cpanm 은 site 디렉터리(/usr/local/lib/.../perl/...)에 설치되어 @INC 상 perl-base/
+#   libperl5.40 이 소유한 원본 취약 파일(2.038)보다 먼저 탐색되지만, 그 원본 파일 자체는
+#   그대로 남아있어 레이어/파일 기준 스캐너(Labrador 등)에는 여전히 취약 버전으로 잡힌다.
+#   따라서 cpanm 이 설치한 패치본 내용을 dpkg 가 실제로 소유한 파일 경로에 직접 덮어써서
+#   "파일 자체"를 패치한다 (IO::Socket 등 동명이 아닌 파일은 경로 패턴으로 제외).
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && \
     apt-get install -y --no-install-recommends cpanminus make gcc libc6-dev libcrypt-dev && \
     cpanm --notest Archive::Tar Socket && \
+    SRC_PM="$(perl -MSocket -e 'print $INC{"Socket.pm"}')" && \
+    SRC_SO="$(dirname "$SRC_PM")/auto/Socket/Socket.so" && \
+    for f in $(dpkg -L perl-base libperl5.40 | grep -E '(perl-base|perl/[0-9.]+)/(Socket\.pm|auto/Socket/Socket\.so)$'); do \
+      case "$f" in \
+        *.pm) cp -f "$SRC_PM" "$f" ;; \
+        *.so) [ -f "$SRC_SO" ] && cp -f "$SRC_SO" "$f" ;; \
+      esac; \
+    done && \
     apt-get purge -y cpanminus make gcc libc6-dev libcrypt-dev && \
     apt-get autoremove -y && \
     rm -rf /root/.cpanm && \
