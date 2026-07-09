@@ -229,10 +229,10 @@ ENV PATH="${APP_VENV}/bin:${PATH}" \
 RUN --mount=type=cache,target=/app/.cache/huggingface \
     echo "HF models ver: ${HF_MODELS_VER}"; \
     mkdir -p /models/doc_parser_models; \
-    huggingface-cli download mncai/doc_parser_models --local-dir /models/doc_parser_models
+    hf download mncai/doc_parser_models --local-dir /models/doc_parser_models
 
 RUN --mount=type=cache,target=/app/.cache/huggingface \
-    huggingface-cli download mncai/doc_parser_models --include "sentence-transformers-all-MiniLM-L6-v2/*" --local-dir /models/doc_parser_models/sentence-transformers-all-MiniLM-L6-v2
+    hf download mncai/doc_parser_models --include "sentence-transformers-all-MiniLM-L6-v2/*" --local-dir /models/doc_parser_models/sentence-transformers-all-MiniLM-L6-v2
 
 ############################
 # 4b) 모델 아티팩트 — NLTK
