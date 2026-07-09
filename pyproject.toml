@@ -43,13 +43,13 @@ authors = [
 requires-python = '>=3.10,<4.0'
 dependencies = [
     'pydantic (>=2.0.0,<3.0.0)',
-    "docling-core[chunking]==2.62",
+    "docling-core[chunking]==2.78.0",
     'docling-parse (>=4.0.0,<5.0.0)',
-    "docling-ibm-models==3.10.3",
+    "docling-ibm-models==3.13.2",
     'filetype (>=1.2.0,<2.0.0)',
     'pypdfium2 (>=5.0.0, <6.0.0)',
     'pydantic-settings (>=2.3.0,<3.0.0)',
-    'huggingface_hub (>=0.23,<1)',
+    'huggingface_hub (>=0.23,<2)',
     'requests (>=2.32.2,<3.0.0)',
     'easyocr (>=1.7,<2.0)',
     'certifi (>=2024.7.4)',
